@@ -1,4 +1,3 @@
-
 import streamlit as st
 import zipfile
 import tempfile
@@ -40,6 +39,7 @@ if st.button("Generate Report"):
                 z.extractall(reports_dir)
 
             date_str = target_date.strftime("%Y-%m-%d") if target_date else None
+
             try:
                 run_hppd_comparison_for_date(
                     templates_folder=templates_dir,
@@ -56,5 +56,16 @@ if st.button("Generate Report"):
                         file_name=f"HPPD_Comparison_{date_str or 'ALL'}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+
+            except ValueError as e:
+                log_path = os.path.join(os.path.dirname(output_file), "hppd_skip_log.txt")
+                if os.path.exists(log_path):
+                    with open(log_path, "r") as logf:
+                        log_contents = logf.read()
+                    st.error(str(e))
+                    st.text_area("Details from Skip Log", log_contents, height=300)
+                else:
+                    st.error(str(e))
+
             except Exception as e:
-                st.error(f"Error occurred during processing:\n{e}")
+                st.error(f"An unexpected error occurred: {e}")
