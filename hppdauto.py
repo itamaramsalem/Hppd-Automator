@@ -93,7 +93,7 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
 
             matched_template_name = match_report_to_template(report_facility, template_map)
             if not matched_template_name:
-                skipped_reports.append((filename, "No matching facility found"))
+                skipped_reports.append((filename, f"No matching facility for: {report_facility}"))
                 continue
 
             candidates = [
@@ -101,7 +101,7 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
                 if entry["facility"] == matched_template_name and entry["date"] == report_date
             ]
             if not candidates:
-                skipped_reports.append((filename, "No matching template for date"))
+                skipped_reports.append((filename, f"Date mismatch: {report_date} not found for {matched_template_name}"))
                 continue
 
             t = candidates[0]
@@ -132,10 +132,9 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
                 "HPPD Budget Status": hppd_flag
             })
         except Exception as e:
-            skipped_reports.append((filename, str(e)))
+            skipped_reports.append((filename, f"Unhandled error: {str(e)}"))
             continue
 
-    # === Categorize ===
     df_results = pd.DataFrame(results)
 
     if df_results.empty or "Actual HPPD" not in df_results.columns:
