@@ -31,6 +31,8 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
         return template_name_map[match[0]] if match else None
 
     # === Parse Templates ===
+    skipped_templates = []
+    skipped_reports = []
     template_entries = []
     for filename in os.listdir(templates_folder):
         if not filename.endswith(".xlsx"):
@@ -40,9 +42,11 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
         try:
             facility_full = wb["1"]["D3"].value
             cleaned_facility = normalize_name(facility_full)
-        except:
+        except Exception as e:
+            skipped_templates.append((filename, "Missing facility name in D3"))
             continue
 
+        matched = False
         for ws in wb.worksheets:
             try:
                 date_cell = ws["B11"].value
@@ -61,8 +65,11 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
                     "file": filename,
                     "sheet": ws.title
                 })
+                matched = True
             except:
                 continue
+        if not matched:
+            skipped_templates.append((filename, "No sheet matched the selected date or missing E27"))
 
     # === Parse Reports ===
     results = []
@@ -86,6 +93,7 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
 
             matched_template_name = match_report_to_template(report_facility, template_map)
             if not matched_template_name:
+                skipped_reports.append((filename, "No matching facility found"))
                 continue
 
             candidates = [
@@ -93,6 +101,7 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
                 if entry["facility"] == matched_template_name and entry["date"] == report_date
             ]
             if not candidates:
+                skipped_reports.append((filename, "No matching template for date"))
                 continue
 
             t = candidates[0]
@@ -122,12 +131,27 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
                 "Actual RN+LPN HPPD": actual_rn_lpn_hppd,
                 "HPPD Budget Status": hppd_flag
             })
-        except:
+        except Exception as e:
+            skipped_reports.append((filename, str(e)))
             continue
 
     # === Categorize ===
-    df_results = pd.DataFrame(results).round(2)
+    df_results = pd.DataFrame(results)
 
+    if df_results.empty or "Actual HPPD" not in df_results.columns:
+        log_path = os.path.join(os.path.dirname(output_path), "hppd_skip_log.txt")
+        with open(log_path, "w") as f:
+            if skipped_templates:
+                f.write("Skipped Templates:\n")
+                for fname, reason in skipped_templates:
+                    f.write(f"  {fname}: {reason}\n")
+            if skipped_reports:
+                f.write("\nSkipped Reports:\n")
+                for fname, reason in skipped_reports:
+                    f.write(f"  {fname}: {reason}\n")
+        raise ValueError(f"No valid data to process. Log saved to: {log_path}")
+
+    df_results = df_results.round(2)
     df_pool = df_results.copy()
     good_hppd_mask = df_pool["Actual HPPD"].between(3.00, 3.30)
     good_cna_mask = df_pool["Actual CNA HPPD"].between(2.00, 2.06)
@@ -143,7 +167,6 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
     df_pool = df_pool.drop(index=group2.index)
     group3 = df_pool[bad_hppd_mask & bad_split_mask].copy()
 
-    # === Output Excel File ===
     wb = Workbook()
     ws = wb.active
     ws.title = "Categorized Facilities"
