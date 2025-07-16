@@ -209,3 +209,28 @@ def run_hppd_comparison_for_date(templates_folder, reports_folder, target_date, 
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 2, 50)
 
     wb.save(output_path)
+
+def run_hppd_analysis(template_dir: str, report_dir: str, output_path: str):
+    """
+    Runs HPPD comparison across all matching template/report pairs using today's date.
+    """
+    from datetime import datetime
+    import os
+    today_str = datetime.today().strftime("%Y-%m-%d")
+
+    # Verify input folders exist
+    if not os.path.isdir(template_dir):
+        raise ValueError(f"Template folder does not exist: {template_dir}")
+    if not os.path.isdir(report_dir):
+        raise ValueError(f"Report folder does not exist: {report_dir}")
+
+    run_hppd_comparison_for_date(
+        templates_folder=template_dir,
+        reports_folder=report_dir,
+        target_date=today_str,
+        output_path=output_path
+    )
+
+
+
+

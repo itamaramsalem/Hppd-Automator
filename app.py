@@ -1,71 +1,69 @@
 import streamlit as st
-import zipfile
-import tempfile
 import os
 from datetime import datetime
-from hppdauto import run_hppd_comparison_for_date
+from hppdauto import run_hppd_comparison_for_date, run_hppd_analysis
 
 st.set_page_config(page_title="HPPD Automator", layout="centered")
-st.title("HPPD Automator")
+st.title("📊 HPPD Automator")
 
-# Step 1: Upload zipped folders
-st.markdown("### 1. Upload Zipped Folders")
-template_zip = st.file_uploader("Labor Templates (.zip)", type="zip")
-report_zip = st.file_uploader("Actual Reports (.zip)", type="zip")
+# Step 1: Input folders
+st.markdown("### 1. Enter Folder Paths")
+template_path = st.text_input("Labor Templates Folder Path")
+report_path = st.text_input("Actual Reports Folder Path")
 
-# Step 2: Choose analysis mode
-st.markdown("### 2. Choose Date Range")
-date_mode = st.radio("Run Mode", ["Specific Date", "All Dates"])
+# Step 2: Choose run mode
+st.markdown("### 2. Choose Analysis Mode")
+run_mode = st.radio("Run Mode", ["Specific Date", "All Dates"])
 
-if date_mode == "Specific Date":
-    target_date = st.date_input("Select the date you want to analyze")
+if run_mode == "Specific Date":
+    selected_date = st.date_input("Select date to analyze")
+    date_str = selected_date.strftime("%Y-%m-%d")
 else:
-    target_date = None
+    date_str = None
 
-# Step 3: Run analysis
-if st.button("Generate Report"):
-    if not template_zip or not report_zip:
-        st.error("Please upload both zipped folders.")
+# Step 3: Trigger analysis
+if st.button("Run HPPD Comparison"):
+    if not os.path.isdir(template_path):
+        st.error("❌ Invalid templates folder path.")
+    elif not os.path.isdir(report_path):
+        st.error("❌ Invalid reports folder path.")
     else:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            templates_dir = os.path.join(tmpdir, "templates")
-            reports_dir = os.path.join(tmpdir, "reports")
-            output_file = os.path.join(tmpdir, "HPPD_Report.xlsx")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = f"HPPD_Comparison_{date_str or 'ALL'}_{timestamp}.xlsx"
 
-            # Extract zip files
-            with zipfile.ZipFile(template_zip, 'r') as z:
-                z.extractall(templates_dir)
-            with zipfile.ZipFile(report_zip, 'r') as z:
-                z.extractall(reports_dir)
-
-            date_str = target_date.strftime("%Y-%m-%d") if target_date else None
-
-            try:
+        try:
+            if date_str:
                 run_hppd_comparison_for_date(
-                    templates_folder=templates_dir,
-                    reports_folder=reports_dir,
+                    templates_folder=template_path,
+                    reports_folder=report_path,
                     target_date=date_str,
                     output_path=output_file
                 )
-                st.success("Report generated successfully!")
+            else:
+                run_hppd_analysis(
+                    template_dir=template_path,
+                    report_dir=report_path,
+                    output_path=output_file
+                )
+            st.success("✅ Report generated successfully!")
 
-                with open(output_file, "rb") as f:
-                    st.download_button(
-                        label="Download Excel Report",
-                        data=f,
-                        file_name=f"HPPD_Comparison_{date_str or 'ALL'}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+            with open(output_file, "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Excel Report",
+                    data=f,
+                    file_name=os.path.basename(output_file),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-            except ValueError as e:
-                log_path = os.path.join(os.path.dirname(output_file), "hppd_skip_log.txt")
-                if os.path.exists(log_path):
-                    with open(log_path, "r") as logf:
-                        log_contents = logf.read()
-                    st.error(str(e))
-                    st.text_area("Details from Skip Log", log_contents, height=300)
-                else:
-                    st.error(str(e))
+        except ValueError as e:
+            log_path = os.path.join(os.path.dirname(output_file), "hppd_skip_log.txt")
+            if os.path.exists(log_path):
+                with open(log_path, "r") as logf:
+                    log_contents = logf.read()
+                st.error(str(e))
+                st.text_area("Details from Skip Log", log_contents, height=300)
+            else:
+                st.error(str(e))
 
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
+        except Exception as e:
+            st.error(f"❌ Unexpected error: {e}")
